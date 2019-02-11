@@ -1,17 +1,23 @@
 package file
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"time"
+
+	"github.com/iljaweis/resource-ctlr/pkg/resourceutil"
+	"golang.org/x/crypto/ssh"
+	"k8s.io/apimachinery/pkg/types"
 
 	resourcesv1alpha1 "github.com/iljaweis/resource-ctlr/pkg/apis/resources/v1alpha1"
+	hostc "github.com/iljaweis/resource-ctlr/pkg/controller/host"
+	pkgerrors "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -67,71 +73,137 @@ type ReconcileFile struct {
 // Reconcile reads that state of the cluster for a File object and makes changes based on the state read
 // and what is in the File.Spec
 func (r *ReconcileFile) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling File")
+	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	logger.Info("Reconciling FileContent")
 
-	// Fetch the File instance
-	instance := &resourcesv1alpha1.File{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	f := &resourcesv1alpha1.File{}
+	err := r.client.Get(context.TODO(), request.NamespacedName, f)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
 			return reconcile.Result{}, nil
 		}
-		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
 
-	// Define a new Pod object
-	pod := newPodForCR(instance)
-
-	// Set File instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
-		return reconcile.Result{}, err
+	if f.Status.Done {
+		return reconcile.Result{}, nil // TODO: update?
 	}
 
-	// Check if this Pod already exists
-	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-		err = r.client.Create(context.TODO(), pod)
-		if err != nil {
-			return reconcile.Result{}, err
+	ready, err := resourceutil.Ready(r.client, request.Namespace, f.Spec.Requires)
+	if err != nil {
+		return reconcile.Result{}, pkgerrors.Wrap(err, "could not determine readiness")
+	}
+
+	if !ready {
+		return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
+	}
+
+	content, contentReady, err := r.getContent(f)
+	if err != nil {
+		return reconcile.Result{}, pkgerrors.Wrapf(err, "could not fetch content for %s does not exist", request)
+	}
+
+	if !contentReady {
+		return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
+	}
+
+	host := &resourcesv1alpha1.Host{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: f.Spec.Host}, host)
+	if err != nil {
+		if errors.IsNotFound(err) { // TODO: reschedule
+			return reconcile.Result{},
+				pkgerrors.Wrapf(err, "the host resource %s/%s does not exist", request.Namespace, f.Spec.Host)
+		} else {
+			return reconcile.Result{},
+				pkgerrors.Wrapf(err, "error fetching host %s/%s", request.Namespace, f.Spec.Host)
 		}
-
-		// Pod created successfully - don't requeue
-		return reconcile.Result{}, nil
-	} else if err != nil {
-		return reconcile.Result{}, err
 	}
 
-	// Pod already exists - don't requeue
-	reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
+	sshKeySecret := &corev1.Secret{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: host.Spec.SshKeySecret}, sshKeySecret)
+	if err != nil {
+		if errors.IsNotFound(err) { // TODO: reschedule
+			return reconcile.Result{}, fmt.Errorf("secret %s/%s containing the private key for host %s was not found",
+				request.Namespace, host.Spec.SshKeySecret, host.Name)
+		} else {
+			return reconcile.Result{}, pkgerrors.Wrapf(err,
+				"error fetching secret %s/%s containing the private key for host %s",
+				request.Namespace, host.Spec.SshKeySecret, host.Name)
+		}
+	}
+
+	privateKey, err := ssh.ParsePrivateKey(sshKeySecret.Data[hostc.PrivateSshKeyField])
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("secret %s/%s does not have a field '%s' containing a valid private key",
+			request.Namespace, host.Spec.SshKeySecret, hostc.PrivateSshKeyField)
+	}
+
+	sshConfig := &ssh.ClientConfig{
+		User: "root",
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeys(privateKey),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	sshClient, err := ssh.Dial("tcp",
+		fmt.Sprintf("%s:%d", host.Spec.IPAddress, host.Spec.Port),
+		sshConfig)
+	if err != nil {
+		return reconcile.Result{},
+			pkgerrors.Wrapf(err, "could not connect to host %s at root@%s:%d", host.Name, host.Spec.IPAddress, host.Spec.Port)
+	}
+
+	sshSession, err := sshClient.NewSession()
+	if err != nil {
+		return reconcile.Result{},
+			pkgerrors.Wrapf(err, "could not connect to host %s at root@%s:%d", host.Name, host.Spec.IPAddress, host.Spec.Port)
+	}
+
+	var b bytes.Buffer
+	sshSession.Stdout = &b
+
+	// what could possibly go wrong
+	if err := sshSession.Run(fmt.Sprintf("cat > %s <<'EOF'\n%s\nEOF", f.Spec.Path, content)); err != nil {
+		return reconcile.Result{},
+			pkgerrors.Wrapf(err, "could not run command %s on host %s", f.Name, host.Name)
+	}
+
+	f.Status.Done = true
+
+	if err := r.client.Status().Update(context.TODO(), f); err != nil {
+		return reconcile.Result{},
+			pkgerrors.Wrapf(err, "error storing results for command %s", f.Name)
+	}
+
 	return reconcile.Result{}, nil
 }
 
-// newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *resourcesv1alpha1.File) *corev1.Pod {
-	labels := map[string]string{
-		"app": cr.Name,
+func (r *ReconcileFile) getContent(f *resourcesv1alpha1.File) (string, bool, error) {
+
+	if f.Spec.Content != "" {
+		return f.Spec.Content, true, nil
 	}
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-pod",
-			Namespace: cr.Namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    "busybox",
-					Image:   "busybox",
-					Command: []string{"sleep", "3600"},
-				},
-			},
-		},
+	if f.Spec.Source == nil {
+		return "", false, nil
 	}
+
+	if f.Spec.Source.FileContent != nil {
+		fmt.Printf("getting filecontent %s\n", f.Spec.Source.FileContent.Name)
+		fc := &resourcesv1alpha1.FileContent{}
+		err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: f.Namespace, Name: f.Spec.Source.FileContent.Name}, fc)
+		if err != nil && !errors.IsNotFound(err) {
+			return "", false, pkgerrors.Wrapf(err, "could not get filecontent %s/%s", f.Namespace, f.Spec.Source.FileContent.Name)
+		}
+		if err != nil {
+			return "", false, nil
+		}
+		if fc.Status.Done {
+			return fc.Status.Content, true, nil
+		} else {
+			return "", false, nil
+		}
+	}
+
+	return "", false, nil
 }

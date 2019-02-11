@@ -1,0 +1,11 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: resource-ctlr
+subjects:
+- kind: ServiceAccount
+  name: resource-ctlr
+roleRef:
+  kind: Role
+  name: resource-ctlr
+  apiGroup: rbac.authorization.k8s.io

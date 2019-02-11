@@ -91,7 +91,7 @@ func main() {
 	}
 
 	// Create Service object to expose the metrics port.
-	_, err = metrics.ExposeMetricsPort(ctx, metricsPort)
+	_ = metrics.ExposeMetricsPort()
 	if err != nil {
 		log.Info(err.Error())
 	}

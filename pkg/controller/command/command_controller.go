@@ -8,6 +8,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	resourcesv1alpha1 "github.com/iljaweis/resource-ctlr/pkg/apis/resources/v1alpha1"
+	hostc "github.com/iljaweis/resource-ctlr/pkg/controller/host"
+	pkgerrors "github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -17,9 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	pkgerrors "github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
-	hostc "github.com/iljaweis/resource-ctlr/pkg/controller/host"
 )
 
 var log = logf.Log.WithName("controller_command")
@@ -83,18 +83,16 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 		return reconcile.Result{}, err
 	}
 
-	if command.Status.Executed {
+	if command.Status.Done {
 		return reconcile.Result{}, nil
 	}
-
-	reqLogger.Info(fmt.Sprintf("%+v", command))
 
 	host := &resourcesv1alpha1.Host{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: command.Spec.Host}, host)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return reconcile.Result{},
-			pkgerrors.Wrapf(err, "the host resource %s/%s does not exist", request.Namespace, command.Spec.Host)
+				pkgerrors.Wrapf(err, "the host resource %s/%s does not exist", request.Namespace, command.Spec.Host)
 		} else {
 			return reconcile.Result{},
 				pkgerrors.Wrapf(err, "error fetching host %s/%s", request.Namespace, command.Spec.Host)
@@ -150,7 +148,7 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 			pkgerrors.Wrapf(err, "could not run command %s on host %s", command.Name, host.Name)
 	}
 
-	command.Status.Executed = true
+	command.Status.Done = true
 	command.Status.ExitCode = 0
 	command.Status.Result = b.String()
 

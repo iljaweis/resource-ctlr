@@ -9,14 +9,41 @@ import (
 
 // FileSpec defines the desired state of File
 type FileSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	Host     string      `json:"host"`
+	Path     string      `json:"path"`
+	Content  string      `json:"content,omitempty"`
+	Source   *FileSource `json:"source,omitempty"`
+	Requires *Requires   `json:"requires,omitempty"`
+}
+
+type FileSource struct {
+	FileContent   *FileSourceFileContent   `json:"filecontent,omitempty"`
+	CommandOutput *FileSourceCommandOutput `json:"commandoutput,omitempty"`
+	ConfigMap     *FileSourceConfigMap     `json:"configmap,omitempty"`
+	Secret        *FileSourceSecret        `json:"configmap,omitempty"`
+}
+
+type FileSourceFileContent struct {
+	Name string `json:"name"`
+}
+
+type FileSourceCommandOutput struct {
+	Name string `json:"name"`
+}
+
+type FileSourceConfigMap struct {
+	Name string `json:"name"`
+	Key  string `json:"key"`
+}
+
+type FileSourceSecret struct {
+	Name string `json:"name"`
+	Key  string `json:"key"`
 }
 
 // FileStatus defines the observed state of File
 type FileStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	Done bool `json:"done"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

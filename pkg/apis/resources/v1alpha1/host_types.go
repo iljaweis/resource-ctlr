@@ -12,15 +12,15 @@ type HostSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	SshKeySecret string `json:"sshkeysecret"`
-	IPAddress string `json:"ipaddress"`
-	Port int            `json:"port"`
+	IPAddress    string `json:"ipaddress"`
+	Port         int    `json:"port"`
 }
 
 // HostStatus defines the observed state of Host
 type HostStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	Ready bool `json:"ready"`
+	Ready bool              `json:"ready"`
 	Facts map[string]string `json:"facts"`
 }
 

@@ -281,8 +281,7 @@
   version = "1.0.1"
 
 [[projects]]
-  branch = "master"
-  digest = "1:86268c315b26974aeeeaed2216c81cb65305aa5c6c33b4d643ab289931b57d33"
+  digest = "1:0b2dd5813eba320fd99869c1a5c4b54eb6950544259f2389c5b137be2168429a"
   name = "github.com/operator-framework/operator-sdk"
   packages = [
     "pkg/k8sutil",
@@ -291,7 +290,8 @@
     "version",
   ]
   pruneopts = "NT"
-  revision = "30742a110480b93a67b77cabd154932a4fafafb5"
+  revision = "cc5fe885869c181d820557bd296f092637fa70af"
+  version = "v0.4.0"
 
 [[projects]]
   digest = "1:93b1d84c5fa6d1ea52f4114c37714cddd84d5b78f151b62bb101128dd51399bf"
@@ -499,25 +499,15 @@
   revision = "85acf8d2951cb2a3bde7632f9ff273ef0379bcbd"
 
 [[projects]]
-  branch = "master"
-  digest = "1:97169b5dbcd11eb8d39e20c4cd8eddb425c47bd9c9c7fd4a945cc1508068bb75"
+  branch = "release-branch.go1.10"
+  digest = "1:da87414e84fc746f86ccd362df401ab50f768212065d9707b72048463c98b227"
   name = "golang.org/x/tools"
   packages = [
     "go/ast/astutil",
-    "go/gcexportdata",
-    "go/internal/cgo",
-    "go/internal/gcimporter",
-    "go/internal/packagesdriver",
-    "go/packages",
-    "go/types/typeutil",
     "imports",
-    "internal/fastwalk",
-    "internal/gopathwalk",
-    "internal/module",
-    "internal/semver",
   ]
   pruneopts = "NT"
-  revision = "d66bd3c5d5a61998d3e35797d266491d11b5e487"
+  revision = "e7e52e73e2735bea994c85b62483cc6376dd8d74"
 
 [[projects]]
   digest = "1:902ffa11f1d8c19c12b05cabffe69e1a16608ad03a8899ebcb9c6bde295660ae"
@@ -753,7 +743,6 @@
   revision = "3dcf91f64f638563e5106f21f50c31fa361c918d"
 
 [[projects]]
-  branch = "master"
   digest = "1:4d52082d1d9ea18e04c8b859f6696f1ca42849d68257e5b84812f8067694a2e6"
   name = "k8s.io/gengo"
   packages = [
@@ -767,7 +756,7 @@
     "types",
   ]
   pruneopts = "NT"
-  revision = "f8a0810f38afb8478882b3835a615aebfda39afa"
+  revision = "master"
 
 [[projects]]
   digest = "1:f3b42f307c7f49a1a7276c48d4b910db76e003220e88797f7acd41e3a9277ddf"

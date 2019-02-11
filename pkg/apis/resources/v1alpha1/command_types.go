@@ -9,20 +9,16 @@ import (
 
 // CommandSpec defines the desired state of Command
 type CommandSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	Host string `json:"host"`
-	Command string `json:"command"`
-	Requires string `json:"requires"`
+	Host     string    `json:"host"`
+	Command  string    `json:"command"`
+	Requires *Requires `json:"requires,omitempty"`
 }
 
 // CommandStatus defines the observed state of Command
 type CommandStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	Executed bool `json:"executed"`
-	Result string `json:"result"`
-	ExitCode int `json:"exitcode"`
+	Done     bool   `json:"done"`
+	Result   string `json:"result"`
+	ExitCode int    `json:"exitcode"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
