@@ -76,8 +76,10 @@ func (r *ReconcileFile) Reconcile(request reconcile.Request) (reconcile.Result, 
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("Reconciling FileContent")
 
+	ctx := context.TODO()
+
 	f := &resourcesv1alpha1.File{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, f)
+	err := r.client.Get(ctx, request.NamespacedName, f)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, nil
@@ -95,6 +97,12 @@ func (r *ReconcileFile) Reconcile(request reconcile.Request) (reconcile.Result, 
 	}
 
 	if !ready {
+		if f.Status.StatusString != "WAITING" {
+			f.Status.StatusString = "WAITING"
+			if err := r.client.Status().Update(ctx, f); err != nil {
+				return reconcile.Result{}, pkgerrors.Wrap(err, "could not update status")
+			}
+		}
 		return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
 	}
 
@@ -108,7 +116,7 @@ func (r *ReconcileFile) Reconcile(request reconcile.Request) (reconcile.Result, 
 	}
 
 	host := &resourcesv1alpha1.Host{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: f.Spec.Host}, host)
+	err = r.client.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: f.Spec.Host}, host)
 	if err != nil {
 		if errors.IsNotFound(err) { // TODO: reschedule
 			return reconcile.Result{},
@@ -120,7 +128,7 @@ func (r *ReconcileFile) Reconcile(request reconcile.Request) (reconcile.Result, 
 	}
 
 	sshKeySecret := &corev1.Secret{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: host.Spec.SshKeySecret}, sshKeySecret)
+	err = r.client.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: host.Spec.SshKeySecret}, sshKeySecret)
 	if err != nil {
 		if errors.IsNotFound(err) { // TODO: reschedule
 			return reconcile.Result{}, fmt.Errorf("secret %s/%s containing the private key for host %s was not found",
@@ -170,8 +178,9 @@ func (r *ReconcileFile) Reconcile(request reconcile.Request) (reconcile.Result, 
 	}
 
 	f.Status.Done = true
+	f.Status.StatusString = "DONE"
 
-	if err := r.client.Status().Update(context.TODO(), f); err != nil {
+	if err := r.client.Status().Update(ctx, f); err != nil {
 		return reconcile.Result{},
 			pkgerrors.Wrapf(err, "error storing results for command %s", f.Name)
 	}

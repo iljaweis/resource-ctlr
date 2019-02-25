@@ -4,13 +4,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // HostSpec defines the desired state of Host
 type HostSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	SshKeySecret string `json:"sshkeysecret"`
 	IPAddress    string `json:"ipaddress"`
 	Port         int    `json:"port"`
@@ -18,8 +13,6 @@ type HostSpec struct {
 
 // HostStatus defines the observed state of Host
 type HostStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	Ready bool              `json:"ready"`
 	Facts map[string]string `json:"facts"`
 }

@@ -13,3 +13,8 @@ spec:
   version: v1alpha1
   subresources:
     status: {}
+  additionalPrinterColumns:
+    - name: Address
+      type: string
+      description: IP Address
+      JSONPath: .spec.ipaddress

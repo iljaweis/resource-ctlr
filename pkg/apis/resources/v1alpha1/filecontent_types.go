@@ -4,9 +4,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // FileContentSpec defines the desired state of FileContent
 type FileContentSpec struct {
 	Host     string    `json:"host"`
@@ -16,8 +13,9 @@ type FileContentSpec struct {
 
 // FileContentStatus defines the observed state of FileContent
 type FileContentStatus struct {
-	Done    bool   `json:"done"`
-	Content string `json:"content"`
+	Done         bool   `json:"done"`
+	Content      string `json:"content"`
+	StatusString string `json:"status_string"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

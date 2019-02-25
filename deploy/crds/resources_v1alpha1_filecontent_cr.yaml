@@ -1,7 +1,0 @@
-apiVersion: resources.weisnix.org/v1alpha1
-kind: FileContent
-metadata:
-  name: example-filecontent
-spec:
-  # Add fields here
-  size: 3

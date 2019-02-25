@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/iljaweis/resource-ctlr/pkg/apis"
 	"github.com/iljaweis/resource-ctlr/pkg/controller"
@@ -70,6 +71,7 @@ func main() {
 	mgr, err := manager.New(cfg, manager.Options{
 		Namespace:          namespace,
 		MetricsBindAddress: fmt.Sprintf("%s:%d", metricsHost, metricsPort),
+		SyncPeriod:         func() *time.Duration { x := 5 * time.Second; return &x }(),
 	})
 	if err != nil {
 		log.Error(err, "")

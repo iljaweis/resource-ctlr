@@ -13,3 +13,16 @@ spec:
   version: v1alpha1
   subresources:
     status: {}
+  additionalPrinterColumns:
+    - name: Status
+      type: string
+      description: Resource status
+      JSONPath: .status.status_string
+    - name: Host
+      type: string
+      description: Target host
+      JSONPath: .spec.host
+    - name: Path
+      type: string
+      description: File path
+      JSONPath: .spec.path

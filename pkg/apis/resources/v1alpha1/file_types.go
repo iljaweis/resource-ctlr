@@ -43,7 +43,8 @@ type FileSourceSecret struct {
 
 // FileStatus defines the observed state of File
 type FileStatus struct {
-	Done bool `json:"done"`
+	Done         bool   `json:"done"`
+	StatusString string `json:"status_string"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

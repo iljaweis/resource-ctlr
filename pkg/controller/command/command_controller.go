@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/iljaweis/resource-ctlr/pkg/resourceutil"
 	"golang.org/x/crypto/ssh"
 	"k8s.io/apimachinery/pkg/types"
+	"time"
 
 	resourcesv1alpha1 "github.com/iljaweis/resource-ctlr/pkg/apis/resources/v1alpha1"
 	hostc "github.com/iljaweis/resource-ctlr/pkg/controller/host"
@@ -70,11 +72,13 @@ type ReconcileCommand struct {
 // Reconcile reads that state of the cluster for a Command object and makes changes based on the state read
 // and what is in the Command.Spec
 func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling Command")
+	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	logger.Info("Reconciling Command")
+
+	ctx := context.TODO()
 
 	command := &resourcesv1alpha1.Command{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, command)
+	err := r.client.Get(ctx, request.NamespacedName, command)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, nil
@@ -87,8 +91,23 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 		return reconcile.Result{}, nil
 	}
 
+	ready, err := resourceutil.Ready(r.client, request.Namespace, command.Spec.Requires)
+	if err != nil {
+		return reconcile.Result{}, pkgerrors.Wrap(err, "could not determine readiness")
+	}
+
+	if !ready {
+		if command.Status.StatusString != "WAITING" {
+			command.Status.StatusString = "WAITING"
+			if err := r.client.Status().Update(ctx, command); err != nil {
+				return reconcile.Result{}, pkgerrors.Wrap(err, "could not update status")
+			}
+		}
+		return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
+	}
+
 	host := &resourcesv1alpha1.Host{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: command.Spec.Host}, host)
+	err = r.client.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: command.Spec.Host}, host)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return reconcile.Result{},
@@ -99,8 +118,15 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 		}
 	}
 
+	if command.Status.StatusString != "RUNNING" {
+		command.Status.StatusString = "RUNNING"
+		if err := r.client.Status().Update(ctx, command); err != nil {
+			return reconcile.Result{}, pkgerrors.Wrap(err, "could not update status")
+		}
+	}
+
 	sshKeySecret := &corev1.Secret{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: host.Spec.SshKeySecret}, sshKeySecret)
+	err = r.client.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: host.Spec.SshKeySecret}, sshKeySecret)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, fmt.Errorf("secret %s/%s containing the private key for host %s was not found",
@@ -140,19 +166,34 @@ func (r *ReconcileCommand) Reconcile(request reconcile.Request) (reconcile.Resul
 			pkgerrors.Wrapf(err, "could not connect to host %s at root@%s:%d", host.Name, host.Spec.IPAddress, host.Spec.Port)
 	}
 
-	var b bytes.Buffer
-	sshSession.Stdout = &b
+	var stdout, stderr bytes.Buffer
+	sshSession.Stdout = &stdout
+	sshSession.Stderr = &stderr
 
-	if err := sshSession.Run(command.Spec.Command); err != nil {
-		return reconcile.Result{},
-			pkgerrors.Wrapf(err, "could not run command %s on host %s", command.Name, host.Name)
+	var exitCode int
+
+	err = sshSession.Run(command.Spec.Command)
+
+	command.Status.Stdout = stdout.String()
+	command.Status.Stderr = stderr.String()
+
+	if err != nil {
+		command.Status.StatusString = "FAILED"
+		if exitError, ok := err.(*ssh.ExitError); ok {
+			exitCode = exitError.ExitStatus()
+		} else {
+			return reconcile.Result{},
+				pkgerrors.Wrapf(err, "could not run command %s on host %s", command.Name, host.Name)
+		}
+	} else {
+		command.Status.StatusString = "DONE"
+		command.Status.Done = true
+		exitCode = 0
 	}
 
-	command.Status.Done = true
-	command.Status.ExitCode = 0
-	command.Status.Result = b.String()
+	command.Status.ExitCode = exitCode
 
-	if err := r.client.Status().Update(context.TODO(), command); err != nil {
+	if err := r.client.Status().Update(ctx, command); err != nil {
 		return reconcile.Result{},
 			pkgerrors.Wrapf(err, "error storing results for command %s", command.Name)
 	}

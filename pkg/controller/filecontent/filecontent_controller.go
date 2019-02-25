@@ -73,13 +73,15 @@ type ReconcileFileContent struct {
 // and what is in the FileContent.Spec
 // Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
-// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
+// Stdout.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileFileContent) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	logger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logger.Info("Reconciling FileContent")
 
+	ctx := context.TODO()
+
 	fc := &resourcesv1alpha1.FileContent{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, fc)
+	err := r.client.Get(ctx, request.NamespacedName, fc)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, nil
@@ -97,11 +99,17 @@ func (r *ReconcileFileContent) Reconcile(request reconcile.Request) (reconcile.R
 	}
 
 	if !ready {
+		if fc.Status.StatusString != "WAITING" {
+			fc.Status.StatusString = "WAITING"
+			if err := r.client.Status().Update(ctx, fc); err != nil {
+				return reconcile.Result{}, pkgerrors.Wrap(err, "could not update status")
+			}
+		}
 		return reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Second}, nil
 	}
 
 	host := &resourcesv1alpha1.Host{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: fc.Spec.Host}, host)
+	err = r.client.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: fc.Spec.Host}, host)
 	if err != nil {
 		if errors.IsNotFound(err) { // TODO: reschedule
 			return reconcile.Result{},
@@ -113,7 +121,7 @@ func (r *ReconcileFileContent) Reconcile(request reconcile.Request) (reconcile.R
 	}
 
 	sshKeySecret := &corev1.Secret{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: request.Namespace, Name: host.Spec.SshKeySecret}, sshKeySecret)
+	err = r.client.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: host.Spec.SshKeySecret}, sshKeySecret)
 	if err != nil {
 		if errors.IsNotFound(err) { // TODO: reschedule
 			return reconcile.Result{}, fmt.Errorf("secret %s/%s containing the private key for host %s was not found",
@@ -163,8 +171,9 @@ func (r *ReconcileFileContent) Reconcile(request reconcile.Request) (reconcile.R
 
 	fc.Status.Done = true
 	fc.Status.Content = b.String()
+	fc.Status.StatusString = "DONE"
 
-	if err := r.client.Status().Update(context.TODO(), fc); err != nil {
+	if err := r.client.Status().Update(ctx, fc); err != nil {
 		return reconcile.Result{},
 			pkgerrors.Wrapf(err, "error storing results for command %s", fc.Name)
 	}

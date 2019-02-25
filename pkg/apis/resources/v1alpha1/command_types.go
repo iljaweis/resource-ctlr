@@ -16,9 +16,11 @@ type CommandSpec struct {
 
 // CommandStatus defines the observed state of Command
 type CommandStatus struct {
-	Done     bool   `json:"done"`
-	Result   string `json:"result"`
-	ExitCode int    `json:"exitcode"`
+	Done         bool   `json:"done"`
+	Stdout       string `json:"stdout"`
+	Stderr       string `json:"stderr"`
+	ExitCode     int    `json:"exitcode"`
+	StatusString string `json:"status_string"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
